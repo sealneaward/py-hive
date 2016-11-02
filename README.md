@@ -2,6 +2,7 @@
 A demo of the python libraries for the Hive MapReduce architecture.
 
 - [Hadoop Install](hadoop-install)
+- [Run Job With Python](python)
 
 # Hadoop Install
 
@@ -183,3 +184,127 @@ su hduser
 ```
 /usr/local/hadoop/sbin/stop-dfs.sh
 ```
+
+# Python
+
+
+### Map and Reduce Scripts
+
+- First, lets setup the libraries
+
+```
+cd /py-hive
+pip install -r requirements.txt
+```
+
+- Run the population scripts to get csvs of data.
+
+```
+python populate.py
+```
+
+- Switch back to the hadoop user and add some hdfs data from the csvs into the hadoop storage
+
+```
+su hduser
+hdfs dfs mkdir /user
+hdfs dfs mkdir /user/data
+hdfs dfs -put /home/neil/projects/py-hive/data/* /user/data
+```
+
+- Display the copied data
+
+```
+hdfs dfs -ls /user/data
+
+Found 5 items
+-rw-r--r--   1 hduser supergroup      25209 2016-11-02 17:15 /user/data/hustle.csv
+-rw-r--r--   1 hduser supergroup      35777 2016-11-02 17:15 /user/data/overall_defense.csv
+-rw-r--r--   1 hduser supergroup      34513 2016-11-02 17:15 /user/data/rim.csv
+-rw-r--r--   1 hduser supergroup      44592 2016-11-02 17:15 /user/data/speed.csv
+-rw-r--r--   1 hduser supergroup      65409 2016-11-02 17:15 /user/data/zone_shooting.csv
+```
+
+- Add map script
+
+```
+nano /home/hduser/count_mapper.py
+```
+
+- Copy into map scripts
+
+
+```python
+#!/usr/bin/env python
+
+import sys
+
+for line in sys.stdin:
+    line = line.decode('utf-8')
+    line = line.split(',')
+    team_abr = line[3]
+    # map key value pair of team abbreviation and intermediate count
+    print "%s\t%i" % (team_abr, 1)
+```
+
+- Add reduce script
+
+```
+nano /home/hduser/count_reducer.py
+```
+
+
+- Copy this to reduce script
+
+
+```python
+#!/usr/bin/env python
+
+import sys
+
+current_abr = None
+current_count = 0
+abr = None
+
+for line in sys.stdin:
+    abr, count = line.split('\t')
+    count = int(count)
+    if abr == current_abr:
+        current_count += count
+    else:
+        if current_abr:
+            print '%s\t%i' % (current_abr, current_count)
+        current_abr = abr
+        current_count = count
+
+if current_abr == abr:
+    # map current reduced key value pai
+    print '%s\t%i' % (current_abr, current_count)
+```
+
+- Run the map and reduce jobs. Make sure to run in `~`
+
+```
+cd ~/
+hadoop jar /usr/local/hadoop/share/hadoop/tools/lib/hadoop-streaming-2.7.3.jar -file /home/hduser/count_mapper.py -mapper /home/hduser/count_mapper.py -file /home/hduser/count_reducer.py -reducer /home/hduser/count_reducer.py -input /user/data/rim.csv -output /user/data/rim-output
+```
+
+- It should run without error. To see the output, enter this to view the output document in hadoop.
+
+```
+hdfs dfs -cat /user/data/rim-output/part-00000
+```
+
+- To run the jobs again, you need to remove the output file.
+
+```
+hdfs dfs -rm -r /user/data/rim-output
+```
+
+### Browsing the HDFS
+
+- If you still have hadoop running, you can view the files in output from the web browser as well.
+
+- Go to `http://localhost:50070/explorer.html` and add the directory that you want to explore.
+
+![Directory](img/directory.png)
