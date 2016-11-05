@@ -209,13 +209,14 @@ python populate.py
 su hduser
 hdfs dfs mkdir /user
 hdfs dfs mkdir /user/data
-hdfs dfs -put /home/neil/projects/py-hive/data/* /user/data
+hdfs dfs mkdir /user/data/nba
+hdfs dfs -put /home/neil/projects/py-hive/data/* /user/data/nba
 ```
 
 - Display the copied data
 
 ```
-hdfs dfs -ls /user/data
+hdfs dfs -ls /user/data/nba
 
 Found 5 items
 -rw-r--r--   1 hduser supergroup      25209 2016-11-02 17:15 /user/data/hustle.csv
@@ -286,19 +287,19 @@ if current_abr == abr:
 
 ```
 cd ~/
-hadoop jar /usr/local/hadoop/share/hadoop/tools/lib/hadoop-streaming-2.7.3.jar -file /home/hduser/count_mapper.py -mapper /home/hduser/count_mapper.py -file /home/hduser/count_reducer.py -reducer /home/hduser/count_reducer.py -input /user/data/rim.csv -output /user/data/rim-output
+hadoop jar /usr/local/hadoop/share/hadoop/tools/lib/hadoop-streaming-2.7.3.jar -file /home/hduser/count_mapper.py -mapper /home/hduser/count_mapper.py -file /home/hduser/count_reducer.py -reducer /home/hduser/count_reducer.py -input /user/data/nba/rim.csv -output /user/data/nba/rim-output
 ```
 
 - It should run without error. To see the output, enter this to view the output document in hadoop.
 
 ```
-hdfs dfs -cat /user/data/rim-output/part-00000
+hdfs dfs -cat /user/data/nba/rim-output/part-00000
 ```
 
 - To run the jobs again, you need to remove the output file.
 
 ```
-hdfs dfs -rm -r /user/data/rim-output
+hdfs dfs -rm -r /user/data/nba/rim-output
 ```
 
 ### Browsing the HDFS
@@ -308,3 +309,160 @@ hdfs dfs -rm -r /user/data/rim-output
 - Go to `http://localhost:50070/explorer.html` and add the directory that you want to explore.
 
 ![Directory](img/directory.png)
+
+# Hive
+
+### Hive Installation
+
+- Download the hive installation package. Unpack it
+
+```
+su hduser
+cd ~
+wget http://apache.mirror.gtcomm.net/hive/hive-2.1.0/apache-hive-2.1.0-bin.tar.gz
+tar -xzvf apache-hive-2.1.0-bin.tar.gz
+```
+
+- Edit the bash configuration file
+
+```
+nano ~/.bashrc
+```
+
+- Add these lines to the end of the file
+
+```bash
+export HIVE_HOME=/home/hduser/apache-hive-2.1.0-bin
+export PATH=$PATH:$HIVE_HOME/bin
+```
+
+- Reload bash
+
+```
+source ~/.bashrc
+```
+
+- Make temporary and warehouse directories for Hive in the HDFS. Add group write premissions to the folders.
+
+```
+hdfs dfs -mkdir -p /tmp
+hdfs dfs -mkdir -p /user/hive
+hdfs dfs -mkdir -p /user/hive/warehouse
+
+hdfs dfs -chmod g+w /tmp
+hdfs dfs -chmod g+w /user/hive/warehouse
+```
+- You need to initialize a schema before running the hive commands
+
+```
+schematool -initSchema -dbType derby
+hive
+```
+
+- If you get at an error upon initialization, it is most likely because you did not initialize the schema. If you get a schema initialization error, try this to remove temp files and add a new schema.
+
+```
+mv metastore_db metastore_db.tmp
+schematool -initSchema -dbType derby
+```
+
+- You should see `hive>  _` initialize in your terminal.
+- To shut it off execute `exit;`
+
+- To get the headers of the rim protection stats to create the table in HiveQL, execute this. Get the file from the HDFS first, then parse the headers.
+
+```
+hdfs dfs -get  /user/data/nba/rim.csv
+head -n 1 rim.csv | tr ',' '\n'
+```
+
+- You should get the headers of the file.
+
+```
+PLAYER_ID
+PLAYER_NAME
+TEAM_ID
+TEAM_ABBREVIATION
+GP
+W
+L
+MIN
+STL
+BLK
+DREB
+DEF_RIM_FGM
+DEF_RIM_FGA
+DEF_RIM_FG_PCT
+```
+
+- Now write to rim.csv without the headers.
+
+```
+tail -n +2 rim.csv > tmp && mv tmp rim.csv
+```
+
+- Write the file to the HDFS. Delete the existing rim.csv file.
+
+```
+hdfs dfs -rm /user/data/nba/rim.csv
+hdfs dfs -put rim.csv /user/data/nba/rim.csv
+```
+
+- Create the table
+
+```sql
+hive>CREATE TABLE IF NOT EXISTS rim
+      (
+        PLAYER_ID INT,
+        PLAYER_NAME STRING,
+        TEAM_ID INT,
+        TEAM_ABBREVIATION STRING,
+        GP INT,
+        W INT,
+        L INT,
+        MIN DOUBLE,
+        STL INT,
+        BLK INT,
+        DREB INT,
+        DEF_RIM_FGM INT,
+        DEF_RIM_FGA INT,
+        DEF_RIM_FG_PCT DOUBLE
+      )
+      COMMENT 'Rim Protection Player Table'
+      ROW FORMAT DELIMITED
+      FIELDS TERMINATED BY ','
+      STORED AS TEXTFILE;
+```
+
+- Load the csv file into the table.
+
+```
+LOAD DATA INPATH '/user/data/nba/rim.csv' OVERWRITE INTO TABLE rim;
+```
+
+- Once the data is loaded, you can query the database
+
+```
+select team_id, count(player_id) from rim group by team_id;
+```
+
+### Hive from Python TODO
+
+- Install some dependencies to connect to the Hive server
+
+```
+sudo apt-get install libsasl2-dev
+sudo pip install sasl
+sudo pip install thrift
+sudo pip install thrift-sasl
+sudo pip install PyHive
+```
+
+- Add a query python script to query the server.
+
+```python
+from pyhive import hive
+conn = hive.Connection(host="localhost", port=50070, username="hduser")
+
+
+```
