@@ -207,9 +207,9 @@ python populate.py
 
 ```
 su hduser
-hdfs dfs mkdir /user
-hdfs dfs mkdir /user/data
-hdfs dfs mkdir /user/data/nba
+hdfs dfs -mkdir /user
+hdfs dfs -mkdir /user/data
+hdfs dfs -mkdir /user/data/nba
 hdfs dfs -put /home/neil/projects/py-hive/data/* /user/data/nba
 ```
 
@@ -446,7 +446,7 @@ LOAD DATA INPATH '/user/data/nba/rim.csv' OVERWRITE INTO TABLE rim;
 select team_id, count(player_id) from rim group by team_id;
 ```
 
-### Hive from Python TODO
+### Hive from Python TODO *Does Not Work*
 
 - Install some dependencies to connect to the Hive server
 
