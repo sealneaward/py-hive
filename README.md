@@ -446,23 +446,5 @@ LOAD DATA INPATH '/user/data/nba/rim.csv' OVERWRITE INTO TABLE rim;
 select team_id, count(player_id) from rim group by team_id;
 ```
 
-### Hive from Python TODO *Does Not Work*
-
-- Install some dependencies to connect to the Hive server
-
-```
-sudo apt-get install libsasl2-dev
-sudo pip install sasl
-sudo pip install thrift
-sudo pip install thrift-sasl
-sudo pip install PyHive
-```
-
-- Add a query python script to query the server.
-
-```python
-from pyhive import hive
-conn = hive.Connection(host="localhost", port=50070, username="hduser")
-
 
 ```
